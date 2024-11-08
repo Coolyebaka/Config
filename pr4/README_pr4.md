@@ -23,7 +23,7 @@ git merge second
 git checkout in
 ```
 ### Результ: 
-https://github.com/CloudVHS/Configurqation-1/blob/main/image.png
+https://github.com/Coolyebaka/Config/blob/main/pr4/resault4.png
 
 ## Задача 2
 ```bash
