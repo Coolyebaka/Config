@@ -47,7 +47,7 @@ git commit -m "new: добавлен файл prog.py"
 ```
 
 ```bash
-xartd0@xartd0-System-Product-Name:~/Desktop/confupr/my_project$ git log
+aisach@aisach-System-Product-Name:~/Desktop/confupr/my_project$ git log
 commit c23cfce606b7c7238c74660da3d7984c6b71e8df (HEAD -> master)
 Author: Coder 1 <coder1@corp.com>
 Date:   Thu Oct 31 23:13:54 2024 +0300
