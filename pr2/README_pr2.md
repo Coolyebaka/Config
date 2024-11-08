@@ -135,7 +135,7 @@ digraph matplotlib_dependencies {
 ```
 
 ### Результат.
-Вот такой получился [граф](https://github.com/CloudVHS/Configurqation-1/blob/main/practice2/matplotlibgraph.png).
+Вот такой получился [граф](https://github.com/Coolyebaka/Config/blob/main/pr2/matplotlibgraph.png).
 
 ### Решение. Для express.
 Аналогично, для express.
