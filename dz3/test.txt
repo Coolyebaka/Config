@@ -1,0 +1,6 @@
+begin
+DB_HOST := "localhost";
+DB_USER := "admin";
+DB_PASSWORD := "secret";
+DB_PORT := #(DB_PORT);
+end
