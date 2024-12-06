@@ -119,6 +119,10 @@ class Emulator:
         """
         try:
             new_path = os.path.abspath(os.path.join(self.current_dir, path))
+            # Проверяем, что новый путь не выходит за пределы домашней директории
+            if os.path.commonpath([new_path, self.temp_dir]) != self.temp_dir:
+                return "cd: Access denied: cannot go beyond home directory"
+            
             if os.path.isdir(new_path):
                 self.previous_dirs.append(self.current_dir)
                 self.current_dir = new_path
@@ -128,6 +132,7 @@ class Emulator:
             return f"cd: {path}: No such file or directory"
         except Exception as e:
             return f"cd: Error: {str(e)}"
+
 
     def mkdir(self, directory_name):
         """
