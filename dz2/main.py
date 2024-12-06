@@ -1,60 +1,82 @@
-import os
-import subprocess
 import argparse
+import pygit2
 from datetime import datetime
+import subprocess
+import os
 
-def get_git_commits(repo_path, date):
-    # Формируем команду для получения коммитов до указанной даты
-    date_str = date.strftime("%Y-%m-%d")
-    cmd = ["git", "log", "--before", date_str, "--pretty=format:%H %p"]
-    
-    result = subprocess.run(cmd, cwd=repo_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode != 0:
-        raise Exception(f"Git command failed: {result.stderr.decode()}")
+# Функция для получения коммитов до заданной даты
+def get_commits(repo_path, before_date):
+    repo = pygit2.init_repository(repo_path, bare=True)
+    commits = []
 
-    commits = result.stdout.decode().strip().split("\n")
-    return [line.split() for line in commits]
+    # Итерируем по всем коммитам в репозитории
+    for commit in repo.walk(repo.head.target, pygit2.GIT_SORT_TIME):
+        if commit.commit_time < before_date.timestamp():
+            commits.append(commit)
 
-def create_mermaid_graph(commits):
-    graph = "graph TD\n"
+    return commits
+
+# Функция для построения графа зависимостей
+def build_dependency_graph(commits):
+    graph = {}
+
     for commit in commits:
-        commit_hash = commit[0]
-        parents = commit[1:]
-        for parent in parents:
-            graph += f"  {commit_hash}[{commit_hash}] --> {parent}[{parent}]\n"
+        graph[str(commit.id)] = [str(parent.id) for parent in commit.parents]
+
     return graph
 
-def generate_graph(graph, visualizer_path, output_path):
+# Функция для генерации графа в формате Mermaid
+def generate_mermaid_graph(graph):
+    mermaid = 'graph TD\n'
+
+    for commit, parents in graph.items():
+        for parent in parents:
+            mermaid += f'  {parent} --> {commit}\n'
+
+    return mermaid
+
+# Функция для создания SVG-файла с помощью mermaid-cli
+def generate_svg_from_mermaid(mermaid_code, output_file):
+    # Сохраняем Mermaid код в файл
     with open("graph.mmd", "w") as f:
-        f.write(graph)
-    
-    cmd = [visualizer_path, "-i", "graph.mmd", "-o", output_path]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode != 0:
-        raise Exception(f"Mermaid visualizer failed: {result.stderr.decode()}")
+        f.write(mermaid_code)
 
+    # Используем mermaid-cli для конвертации в SVG
+    subprocess.run(['mmdc', '-i', 'graph.mmd', '-o', output_file])
+
+    # Удаляем временный файл
+    os.remove("graph.mmd")
+
+# Основная логика программы
 def main():
-    parser = argparse.ArgumentParser(description="Git commit dependency visualizer.")
-    parser.add_argument("--repo", required=True, help="Path to the git repository")
-    parser.add_argument("--date", required=True, help="Date to filter commits (format: YYYY-MM-DD)")
-    parser.add_argument("--visualizer", required=True, help="Path to mermaid-cli executable")
-    parser.add_argument("--output", required=True, help="Path to output image (e.g., graph.png)")
-
+    parser = argparse.ArgumentParser(description='Visualize git commit dependencies.')
+    parser.add_argument('repo_path', type=str, help='Path to the Git repository')
+    parser.add_argument('date', type=str, help='Date for filtering commits (YYYY-MM-DD)')
+    parser.add_argument('output_svg', type=str, help='Path to output SVG file')
     args = parser.parse_args()
 
-    # Преобразуем строку в объект даты
+    # Конвертируем строку в объект datetime
     date = datetime.strptime(args.date, "%Y-%m-%d")
 
-    # Получаем список коммитов и их зависимостей
-    commits = get_git_commits(args.repo, date)
+    # Получаем список коммитов до заданной даты
+    commits = get_commits(args.repo_path, date)
+
+    # Если коммиты не найдены
+    if not commits:
+        print("No commits found before the specified date.")
+        return
+
+    # Строим граф зависимостей
+    graph = build_dependency_graph(commits)
 
     # Генерируем граф в формате Mermaid
-    graph = create_mermaid_graph(commits)
+    mermaid_graph = generate_mermaid_graph(graph)
 
-    # Генерируем изображение
-    generate_graph(graph, args.visualizer, args.output)
+    # Отладочный вывод графа Mermaid
 
-    print(f"Graph generated at {args.output}")
+    # Генерируем SVG из Mermaid
+    generate_svg_from_mermaid(mermaid_graph, args.output_svg)
 
+# Запуск основной функции
 if __name__ == "__main__":
     main()
