@@ -1,0 +1,8 @@
+set HOST = 19216801;
+set PORT = 8080;
+dict :=
+   begin
+        server := #(HOST);
+        port := #(PORT);
+        ssl_enabled := 1;
+    end

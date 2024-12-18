@@ -19,9 +19,12 @@ def get_commits(repo_path, before_date):
 # Функция для построения графа зависимостей
 def build_dependency_graph(commits):
     graph = {}
+    commit_index = {commit.id: i for i, commit in enumerate(commits)}
 
     for commit in commits:
-        graph[str(commit.id)] = [str(parent.id) for parent in commit.parents]
+        commit_str = f'{commit_index[commit.id]}__{commit.id}'
+        parents_str = [f'{commit_index[parent.id]}__{parent.id}' for parent in commit.parents]
+        graph[commit_str] = parents_str
 
     return graph
 

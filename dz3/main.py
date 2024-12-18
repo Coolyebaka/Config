@@ -1,89 +1,149 @@
 import re
 
-def parse_input(text):
-    # Регулярное выражение для поиска массива
-    array_pattern = r"\(\s*\{([^\}]+)\}\s*\)"
-    array_matches = re.findall(array_pattern, text)
 
-    # Регулярное выражение для словаря
-    dictionary_pattern = r"begin\s*\n([\s\S]+?)\s*end"  # Захватываем все, включая пробелы и новые строки
-    dict_matches = re.findall(dictionary_pattern, text)
+class ConfigParser:
+    def __init__(self):
+        self.constants = {}
+        self.output = {}
+        self.context_stack = []  # Стек для поддержки вложенных контекстов
 
-    # Регулярное выражение для поиска объявления констант
-    set_pattern = r"set\s+([A-Z]+)\s*=\s*(.+?);"
-    set_matches = re.findall(set_pattern, text)
+    def parse_input(self, input_text):
+        """Главный метод для обработки входного текста"""
+        lines = input_text.strip().splitlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            if not line:
+                i += 1
+                continue
 
-    # Отладочные сообщения для проверки, что правильно извлекаем массивы, словари и константы
-    print(f"Arrays found: {array_matches}")
-    print(f"Dictionaries found: {dict_matches}")
-    print(f"Sets found: {set_matches}")
+            # Проверяем константы
+            if line.startswith("set "):
+                self.handle_set(line)
+            elif line == "dict :=":
+                self.handle_dict_initialize()
+            elif line == "begin":
+                self.handle_dict_start()
+            elif line == "end":
+                self.handle_dict_end()
+            elif re.match(r"(\w+) :=\s*", line):  # Проверяем `key_name :=`
+                key_match = re.match(r"(\w+) :=\s*", line)
+                if key_match:
+                    key_name = key_match.group(1)
+                    # Проверяем, начинается ли после этой строки блок begin
+                    if i + 1 < len(lines) and lines[i + 1].strip() == "begin":
+                        self.handle_nested_dict_start(key_name)
+                        i += 1  # Пропускаем строку `begin`
+                    else:
+                        self.handle_assignment(line)
+            elif re.match(r"(\w+) := (.+);", line):
+                self.handle_assignment(line)
+            else:
+                raise SyntaxError(f"Unknown syntax or command: {line}")
+            i += 1
 
-    # Вернуть найденные элементы в виде структуры данных
-    return {
-        'arrays': array_matches,
-        'dictionaries': dict_matches,
-        'sets': set_matches
-    }
+    def handle_set(self, line):
+        """Обработка объявления константы"""
+        match = re.match(r"set (\w+) = (\d+);", line)
+        if match:
+            name, value = match.groups()
+            self.constants[name] = int(value)
+        else:
+            raise SyntaxError(f"Invalid syntax in line: {line}")
 
-def generate_toml(parsed_data):
-    toml_output = ""
+    def handle_dict_initialize(self):
+        """Инициализация начального словаря при 'dict := '"""
+        new_context = {}
+        self.context_stack = [new_context]
+        self.output["dict"] = new_context
 
-    # Обработка массивов
-    if parsed_data['arrays']:
-        toml_output += "[arrays]\n"
-        for array in parsed_data['arrays']:
-            # Разделяем элементы массива и обрабатываем их
-            array_values = [value.strip() for value in array.split(',')]
-            toml_output += f"array = [{', '.join(array_values)}]\n"
+    def handle_dict_start(self):
+        """Начало нового блока словаря"""
+        new_context = {}
+        if self.context_stack:
+            self.context_stack[-1]["__context__"] = new_context
+        self.context_stack.append(new_context)
 
-    # Пример конвертации словаря в TOML
-    section_count = 1
-    for dictionary in parsed_data['dictionaries']:
-        toml_output += f"[section{section_count}]\n"  # Задаем уникальный раздел для каждого словаря
-        
-        # Разделим по строкам, чтобы обработать каждую запись в словаре
-        lines = dictionary.splitlines()
-        for line in lines:
-            line = line.strip()  # Убираем лишние пробелы
-            if " := " in line:  # Проверяем наличие разделителя
-                name, value = line.split(" := ")
-                toml_output += f"{name.strip()} = {value.strip()}\n"
-        
-        section_count += 1
+    def handle_dict_end(self):
+        """Завершение словаря и возврат к предыдущему контексту"""
+        if len(self.context_stack) <= 1:
+            raise SyntaxError("Unexpected 'end' without a matching 'begin'.")
+        self.context_stack.pop()
 
-    # Обработка наборов (констант)
-    if parsed_data['sets']:
-        toml_output += "\n"  # Добавляем новую строку перед набором
-        for name, value in parsed_data['sets']:
-            toml_output += f"{name.strip()} = {value.strip()}\n"
+    def handle_nested_dict_start(self, key_name):
+        """Начало вложенного словаря"""
+        new_context = {}
+        if self.context_stack:
+            self.context_stack[-1][key_name] = new_context
+        self.context_stack.append(new_context)
 
-    return toml_output
+    def handle_assignment(self, line):
+        """Обработка присваивания и массивов/констант"""
+        match = re.match(r"(\w+) := (.+);", line)
+        if match:
+            key, value = match.groups()
+            if value.startswith("#(") and value.endswith(")"):  # Обработка констант
+                const_name = value[2:-1]
+                if const_name in self.constants:
+                    value = self.constants[const_name]
+                else:
+                    raise ValueError(f"Undefined constant: {const_name}")
+            elif re.match(r"\(\{(.+)}\)", value):  # Массив
+                array_values = [int(x.strip()) for x in re.findall(r"\d+", value)]
+                value = array_values
+            else:
+                try:
+                    value = int(value)
+                except ValueError:
+                    pass  # Значит строка или другой формат
 
-def validate_syntax(text):
-    # Проверка на наличие ошибок, например, незакрытые блоки begin/end
-    if text.count('begin') != text.count('end'):
-        raise SyntaxError("Unmatched 'begin' and 'end' blocks")
+            if self.context_stack:
+                self.context_stack[-1][key] = value
+            else:
+                raise SyntaxError("No context started for assignments.")
+        else:
+            raise SyntaxError(f"Invalid assignment syntax in line: {line}")
+
+    def to_toml(self):
+        if not list(self.output.keys()):
+            return ""
+        self.output[list(self.output.keys())[0]] = self.output[list(self.output.keys())[0]]["__context__"]
+        """Преобразуем внутренние данные в TOML-совместимый формат"""
+        def convert_to_toml(data, prefix=""):
+            """Рекурсивная функция для обработки вложенных словарей и их конвертации"""
+            output_lines = []
+            for k, v in data.items():
+                if isinstance(v, dict):
+                    # Вложенный словарь
+                    output_lines.append(f"[{prefix + k}]")
+                    output_lines.extend(convert_to_toml(v, prefix + k + "."))
+                elif isinstance(v, list):
+                    toml_list = "[" + ", ".join(map(str, v)) + "]"
+                    output_lines.append(f"{k} = {toml_list}")
+                else:
+                    output_lines.append(f"{k} = {v}")
+            return output_lines
+
+        toml_output = convert_to_toml(self.output)
+        return "\n".join(toml_output)
+
+
+def main():
+    import sys
+    print("Введите конфигурацию (для завершения ввода используйте Ctrl+D [UNIX] или Ctrl+Z [Windows]):")
+
+    # Считываем весь текст из стандартного ввода
+    input_lines = sys.stdin.read()
+
+    parser = ConfigParser()
+    try:
+        parser.parse_input(input_lines)
+        toml_output = parser.to_toml()
+        print("\nВыходной TOML:")
+        print(toml_output)
+    except Exception as e:
+        print(f"Ошибка: {e}")
+
 
 if __name__ == "__main__":
-    # Пример текста для анализа
-    text = """
-    begin
-        set DB_PORT = "123";
-
-        DB_HOST := "localhost";
-        DB_USER := "admin";
-        DB_PASSWORD := "secret";
-        DB_LOL := #(DB_PORT);
-    end
-    """
-
-    # Валидируем синтаксис перед анализом
-    validate_syntax(text)  # Валидация синтаксиса
-    
-    # Парсим входной текст
-    result = parse_input(text)
-
-    # Выводим результат генерации TOML
-    toml_result = generate_toml(result)
-    print("Generated TOML:\n")
-    print(toml_result)
+    main()

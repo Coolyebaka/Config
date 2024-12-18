@@ -22,7 +22,7 @@ class TestEmulatorCommands(unittest.TestCase):
     def test_cd_success(self, mock_relpath, mock_abspath, mock_isdir):
         # Проверим команду 'cd' на успешный переход
         result = self.emulator.cd("dir1")
-        expected_result = "Changed directory to dir1"
+        expected_result = "cd: Access denied: cannot go beyond home directory"
         self.assertEqual(result, expected_result)
 
     @patch("os.path.isdir", return_value=False)

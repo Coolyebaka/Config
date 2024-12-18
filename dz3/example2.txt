@@ -1,0 +1,14 @@
+set DB_PORT = 5432;
+set DB_USER = 1;
+set DB_PASS = 12345678;
+
+dict :=
+    begin
+        port := #(DB_PORT);
+        credentials :=
+            begin
+                users := ({12, 32, 4354, 43});
+                user := #(DB_USER);
+                password := #(DB_PASS);
+            end
+    end
